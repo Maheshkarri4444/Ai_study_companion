@@ -86,8 +86,11 @@ function loadConfig(): Config {
   const parsed = EnvSchema.safeParse(process.env);
   if (!parsed.success) {
     const problems = parsed.error.issues.map((i) => `  • ${i.path.join('.') || '(root)'}: ${i.message}`);
+    const message = `Invalid environment configuration:\n${problems.join('\n')}`;
+    // On Vercel a thrown error reaches app.js, which reports it on every request (names, never values).
+    if (process.env.VERCEL) throw new Error(message);
     // The logger depends on config, so report directly and stop: running misconfigured is worse than not running.
-    console.error(`\nInvalid environment configuration:\n${problems.join('\n')}\n`);
+    console.error(`\n${message}\n`);
     process.exit(1);
   }
   const env = parsed.data;

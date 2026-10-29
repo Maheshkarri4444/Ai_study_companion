@@ -2,7 +2,8 @@ import pino from 'pino';
 import { config } from '../config/env';
 import { getContext } from './context';
 
-const usePretty = !config.isProduction && !config.isTest;
+// pino-pretty is a dev dependency: never on Vercel, whatever NODE_ENV says (it isn't deployed there).
+const usePretty = !config.isProduction && !config.isTest && !process.env.VERCEL;
 
 export const logger = pino({
   level: config.isTest ? 'silent' : config.LOG_LEVEL,
