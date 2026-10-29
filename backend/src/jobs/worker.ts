@@ -176,6 +176,55 @@ export async function drainJobs(options: { types?: string[]; maxJobs?: number } 
   return { processed, failed };
 }
 
+/**
+ * The polling worker's serverless counterpart (Vercel, src/vercel.ts): runs due jobs with
+ * WORKER_CONCURRENCY slots until the queue is empty, claiming new ones only for `budgetMs`. Leases are
+ * extended while a job runs, as in the worker; if the platform ends the function mid-job, the lease
+ * expires and `system.reconcile` requeues it (handlers checkpoint, so the retry resumes).
+ */
+export async function runDueJobs(options: { budgetMs: number }) {
+  const workerId = `fn:${hostname()}:${process.pid}:${randomUUID().slice(0, 6)}`;
+  const claimUntil = Date.now() + options.budgetMs;
+  const signal = new AbortController().signal;
+  const types = registeredJobTypes();
+  const stats = { processed: 0, failed: 0 };
+
+  const slot = async () => {
+    while (Date.now() < claimUntil) {
+      const job = await claimJob(workerId, LEASE_MS, types);
+      if (!job) return;
+      const leaseTimer = setInterval(() => void extendLease(job._id, workerId, LEASE_MS).catch(() => undefined), LEASE_MS / 3);
+      try {
+        if (await processJob(job, workerId, signal)) stats.processed++;
+        else stats.failed++;
+      } finally {
+        clearInterval(leaseTimer);
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: config.WORKER_CONCURRENCY }, slot));
+
+  // One heartbeat for every serverless run, so the admin dashboard shows when jobs last ran.
+  await WorkerHeartbeat.updateOne(
+    { _id: 'vercel' },
+    {
+      $set: {
+        host: 'vercel',
+        pid: process.pid,
+        role: 'serverless',
+        version: config.APP_VERSION,
+        startedAt: new Date(claimUntil - options.budgetMs),
+        lastBeatAt: new Date(),
+        concurrency: config.WORKER_CONCURRENCY,
+        running: 0,
+      },
+      $inc: { processed: stats.processed, failed: stats.failed },
+    },
+    { upsert: true },
+  ).catch((err) => logger.warn({ err }, 'Worker heartbeat failed'));
+  return stats;
+}
+
 let worker: Worker | null = null;
 
 export function startWorker() {

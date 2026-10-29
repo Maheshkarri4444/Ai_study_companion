@@ -65,6 +65,8 @@ const EnvSchema = z.object({
 
   WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(8).default(2),
   WORKER_POLL_MS: z.coerce.number().int().min(100).max(60_000).default(1000),
+  /** Vercel only (src/vercel.ts): UptimeRobot calls GET /api/cron/tick?key=<CRON_KEY> every 5 minutes. */
+  CRON_KEY: z.preprocess(blankToUndefined, z.string().min(16, 'CRON_KEY must be at least 16 characters').optional()),
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 });

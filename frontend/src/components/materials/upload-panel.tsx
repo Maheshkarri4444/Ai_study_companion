@@ -9,7 +9,9 @@ import { useInvalidateAfterUpload } from "@/lib/queries";
 import type { Material } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const MAX_MB = 20; // mirrors the API's MAX_UPLOAD_MB; the server remains the authority
+// Mirrors the API's MAX_UPLOAD_MB (the server remains the authority). 4 on Vercel, which rejects request
+// bodies over 4.5 MB before they reach the API.
+const MAX_MB = 4;
 
 interface UploadItem {
   id: string;

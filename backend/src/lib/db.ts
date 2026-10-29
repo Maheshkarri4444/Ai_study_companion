@@ -5,11 +5,14 @@ mongoose.set('strictQuery', true);
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Connect with bounded retries so a slow Atlas start or a brief network blip doesn't kill the boot. */
-export async function connectDatabase(uri: string, dbName: string, attempts = 5): Promise<void> {
+/**
+ * Connect with bounded retries so a slow Atlas start or a brief network blip doesn't kill the boot.
+ * Serverless (src/vercel.ts) passes fewer attempts and a smaller pool: one per function instance.
+ */
+export async function connectDatabase(uri: string, dbName: string, attempts = 5, maxPoolSize = 20): Promise<void> {
   for (let attempt = 1; ; attempt++) {
     try {
-      await mongoose.connect(uri, { dbName, serverSelectionTimeoutMS: 10_000, maxPoolSize: 20 });
+      await mongoose.connect(uri, { dbName, serverSelectionTimeoutMS: 10_000, maxPoolSize });
       logger.info({ dbName }, 'MongoDB connected');
       return;
     } catch (err) {

@@ -4,7 +4,7 @@ An AI-powered learning workspace: learners organise study into **Spaces** and **
 AI Tutor, take adaptive quizzes and get evidence-based guidance on what to do next. An **Admin console** gives operators visibility into
 users, learning activity, AI usage and system health.
 
-**Live app: https://ai-companion-two-jet.vercel.app** — frontend on Vercel, API + background worker on Render, MongoDB Atlas, Google Gemini.
+**Live app: https://ai-companion-two-jet.vercel.app** — frontend and API (serverless, with on-demand background jobs) on Vercel, MongoDB Atlas, Google Gemini.
 
 > **Status — v0.5.0, deployed.** Authentication, the learner workspace, background document processing, the complete AI layer —
 > **Zoya, the grounded AI tutor**, persistent learning context, AI observability and evaluation — the **adaptive quiz with concept mastery**,
@@ -207,8 +207,9 @@ Live at **https://ai-companion-two-jet.vercel.app** (health: [`/api/health`](htt
 
 - **Frontend → Vercel**: Root Directory `frontend`; [`frontend/vercel.json`](frontend/vercel.json) pins the Next.js build and adds security headers;
   set `BACKEND_URL` to the API's public origin (read at build time for the `/api` rewrite).
-- **API + worker → Render**: Root Directory `backend`, `npm ci --include=dev && npm run build`, start with `npm start`, health check `/api/health`,
-  env from `backend/.env.example` with `NODE_ENV=production` and `COOKIE_SECURE=true`. Allow the host in MongoDB Atlas network access.
+- **API + jobs → Vercel**: a second project with Root Directory `backend`; [`backend/vercel.json`](backend/vercel.json) builds the bundle and
+  [`backend/app.js`](backend/app.js) serves it as one function. Env from `backend/.env.example` with `NODE_ENV=production`, `COOKIE_SECURE=true`,
+  `MAX_UPLOAD_MB=4` and a `CRON_KEY`; an UptimeRobot monitor calls `/api/cron/tick?key=…` every 5 minutes. Allow `0.0.0.0/0` in MongoDB Atlas network access.
 
 Step-by-step settings, environment variables, a smoke test and troubleshooting: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
 
@@ -275,7 +276,7 @@ validated AI output, rate limits, and admin-only APIs.
   the admin console (§22), observability and evaluation results (§23–§24), security, testing, deployment, build status and decision log.
 - [Evaluation approach](docs/EVALUATION.md): how Tutor quality, retrieval, assessments, mastery and recommendations are evaluated, with results.
 - [Testing](docs/TESTING.md): automated suites, the live AI regression suite and a manual end-to-end walkthrough (also the demo script).
-- [Deployment](docs/DEPLOYMENT.md): Vercel + Render + Atlas settings, smoke test and troubleshooting.
+- [Deployment](docs/DEPLOYMENT.md): Vercel + Atlas + UptimeRobot settings, smoke test and troubleshooting.
 - [Known limitations](docs/KNOWN_LIMITATIONS.md) · [Future improvements](docs/FUTURE_IMPROVEMENTS.md).
 
 The **AI Tools and Usage** and **Development Prompts** documents, and a PDF of the architecture document, are submitted as separate PDFs.

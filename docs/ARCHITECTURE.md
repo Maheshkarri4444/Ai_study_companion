@@ -102,7 +102,7 @@ The system continuously answers three questions, each backed by explicit evidenc
 | Auth | Email + password; **bcrypt** (cost 12); JWT (HS256) in an **httpOnly, SameSite=Lax** cookie; RBAC (`user`, `admin`) | Required (no OAuth). httpOnly prevents token theft via XSS; same-origin proxy avoids third-party-cookie blocking. | Bearer token in localStorage (XSS-exposed) |
 | Logging | pino + pino-http, AsyncLocalStorage request context | Structured JSON logs carrying `requestId` / `userId`. | winston |
 | Testing | Vitest + Supertest + mongodb-memory-server; `MockAIProvider` | Fast, isolated, deterministic (no network in unit/integration tests). | Jest |
-| Deployment | Vercel (frontend) + Render (API + worker) + MongoDB Atlas | Free tiers, public URLs, zero ops. | Railway, Fly.io |
+| Deployment | Vercel (frontend + API as a serverless function) + MongoDB Atlas | Free tiers, public URLs, zero ops. | Render (used until 2026-10-29, D37), Railway, Fly.io |
 
 ### Model configuration (verified against the project's key on 2026-09-25)
 
@@ -128,9 +128,9 @@ flowchart TB
   subgraph FE["Frontend host (Vercel)"]
     NX["Next.js server<br/>proxy.ts: route gating<br/>rewrites: /api/* → API"]
   end
-  subgraph BE["Backend host (Render)"]
+  subgraph BE["Backend host (Vercel, serverless)"]
     API["Express API<br/>routers → controllers → services"]
-    WK["Worker<br/>job runner · scheduler"]
+    WK["Job runner<br/>on demand · UptimeRobot tick"]
   end
   subgraph ATLAS["MongoDB Atlas"]
     DB[("Collections")]
@@ -1305,7 +1305,7 @@ because the API sets its own (helmet). Set `BACKEND_URL` in the Vercel project (
 **Live**: https://ai-companion-two-jet.vercel.app (health via the same origin: `/api/health`, `/api/health/ready`); step-by-step settings in
 [DEPLOYMENT.md](DEPLOYMENT.md).
 
-**Topology**: Vercel (Next.js; rewrites `/api/*` → Render) · Render web service (Express, `APP_ROLE=all`, health check `/api/health`) · MongoDB Atlas
+**Topology**: Vercel (Next.js; rewrites `/api/*` → API) · Vercel API project (Express as one function, `src/vercel.ts`; jobs on demand, UptimeRobot calls `/api/cron/tick` every 5 min, D37) · MongoDB Atlas
 (network access open to the host; credentials only in env; Vector Search index created by a setup script).
 Production: `COOKIE_SECURE=true`, `NODE_ENV=production`, strong `JWT_SECRET`.
 **Secrets policy**: real values live only in untracked `.env` files and host dashboards; repository files contain placeholders only.
@@ -1385,7 +1385,7 @@ were squeezed by leading empty days, narrow cards truncated labels, a circular A
 and the Space dashboard lacked the progress and attention view the PRD asks for (§4).
 
 **Phase 6 — Evaluation, hardening, docs & deployment** 🟡
-- ✅ Deployed: Vercel (frontend, `vercel.json` headers verified live) + Render (API + worker) + MongoDB Atlas — https://ai-companion-two-jet.vercel.app (2026-09-26)
+- ✅ Deployed: Vercel (frontend, `vercel.json` headers verified live) + Render (API + worker) + MongoDB Atlas — https://ai-companion-two-jet.vercel.app (2026-09-26); API moved to Vercel on 2026-10-29 (D37)
 - ✅ Submission documents: [EVALUATION.md](EVALUATION.md), [TESTING.md](TESTING.md), [DEPLOYMENT.md](DEPLOYMENT.md), [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md), [FUTURE_IMPROVEMENTS.md](FUTURE_IMPROVEMENTS.md); README submission index and panel tour. The **AI Tools and Usage** and **Development Prompts** documents (the actual Claude Code and ChatGPT prompts, verbatim) and a PDF of this architecture document are submitted as separate PDFs
 - ✅ Demo admin login shown in the README and on the sign-in page for reviewers (D36)
 - ✅ Demo video (5:47, recorded on the live app): https://youtu.be/YEGCGngM3lg, linked with chapters from the README
@@ -1433,6 +1433,7 @@ and the Space dashboard lacked the progress and attention view the PRD asks for 
 | D34 | Day buckets and streaks in UTC | One definition across learners, admins and tests | A learner far from UTC sees days split at local offset; per-user time zones later |
 | D35 | Account profile / preference editing not built | Not required by the PRD; the time went to the learning loop | `preferences` field reserved in `users` |
 | D36 | Publish the demo admin login (README + sign-in page) | Reviewers can open the admin console without a credential hand-off; the admin API is read-only except job retries | Anyone can read learner data on the demo deployment. The password must be unique and rotated after the review (`ADMIN_PASSWORD` on the API host, then `npm run seed:admin`) |
+| D37 | API on Vercel as one serverless function (`src/vercel.ts`); jobs run on demand | Render's free tier now caps outbound bandwidth, and the always-on worker's polling counted against it. The durable queue already had leases, retries and checkpointed handlers, so a job can start from the request that queues it (`waitUntil`) and a 5-minute UptimeRobot tick runs the per-minute maintenance | Uploads capped at 4 MB (Vercel's 4.5 MB request limit); a job longer than the 300 s function limit resumes from its checkpoint on the next run. On any long-running host, `npm start` still runs the API and the polling worker together |
 
 ---
 
@@ -1440,6 +1441,7 @@ and the Space dashboard lacked the progress and attention view the PRD asks for 
 
 | Date | Version | Change |
 |---|---|---|
+| 2026-10-29 | 1.7 | API moved from Render to Vercel (D37): `src/vercel.ts` (the app as one function, jobs on demand, `/api/cron/tick` for UptimeRobot), `runDueJobs` in the worker module, `backend/app.js` + `vercel.json`; uploads capped at 4 MB there. 195 tests green. |
 | 2026-09-25 | 1.0 | Initial architecture for all phases. Verified MongoDB Atlas (8.0, replica set) and Gemini model availability for the provided key; chose model defaults and a fallback chain accordingly. Phase 1 started. |
 | 2026-09-26 | 1.6 | The architecture document, *AI Tools and Usage* and *Development Prompts* exported as PDFs for submission; the AI usage and prompts Markdown files removed from the repository. Demo admin login shown in the README and on the sign-in page (D36). Demo video linked from YouTube (the repository copy removed). |
 | 2026-09-26 | 1.5 | Deployed to Vercel + Render + Atlas (live URL in §30). Submission documents added (AI usage, development prompts, evaluation approach, testing guide, deployment guide, known limitations, future improvements) and linked from the README; demo video added under `docs/demo/`. |
